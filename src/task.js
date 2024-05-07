@@ -1,15 +1,14 @@
 const { parentPort, workerData } = require("worker_threads");
 
-// Function to increment the value by 1
-const processValue = (value) => {
-  return value + 1;
+// Function to increment each value by 1
+const processArray = (array) => {
+  return array.map((value) => value + 1);
 };
-const workerId = workerData;
-console.log("🚀 ~ workerId:", workerId);
 
 // Listen for messages from the main thread
-parentPort.on("message", (value) => {
-  // Process the value
-  const processedValue = processValue(value); // Send the processed value back to the main thread
-  parentPort.postMessage(processedValue);
+parentPort.on("message", ({ index }) => {
+  // Process the chunk of array
+  const result = processArray(workerData);
+  // Send the processed chunk back to the main thread
+  parentPort.postMessage(result);
 });

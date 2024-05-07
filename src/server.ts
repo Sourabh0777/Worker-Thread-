@@ -3,54 +3,44 @@ import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import { Worker, workerData } from "worker_threads";
 
+const PORT = 5500;
 const app = express();
 app.use(express.json());
 app.use(cors());
-
-// Create workers outside the loop
-const worker1 = new Worker("./src/task.js", { workerData: "worker1" });
-const worker2 = new Worker("./src/task.js", { workerData: "worker2" });
-const worker3 = new Worker("./src/task.js", { workerData: "worker3" });
-
 app.use("/", async (req: Request, res: Response) => {
-  // Input array of 100 numbers
   const array = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-  let promises: Promise<any>[] = [];
+  const numWorkers = 3;
+  const chunkSize = Math.ceil(array.length / numWorkers);
+  const workers: Worker[] = [];
 
-  // Split the input array into chunks of 10
-  for (let i = 0; i < array.length; i++) {
-    // Pass the appropriate data to each worker
-    worker1.postMessage(array[i]);
-    worker2.postMessage(array[i + 1]);
-    worker3.postMessage(array[i + 2]);
+  // Create workers
+  for (let i = 0; i < numWorkers; i++) {
+    const start = i * chunkSize;
+    const end = start + chunkSize;
+    const chunk = array.slice(start, end);
 
-    const promise1 = new Promise((resolve, reject) => {
-      worker1.on("message", (msg: any) => {
-        resolve(msg);
-      });
-    });
-
-    const promise2 = new Promise((resolve, reject) => {
-      worker2.on("message", (msg: any) => {
-        resolve(msg);
-      });
-    });
-
-    const promise3 = new Promise((resolve, reject) => {
-      worker3.on("message", (msg: any) => {
-        resolve(msg);
-      });
-    });
-
-    promises.push(promise1, promise2, promise3);
+    const worker = new Worker("./src/task.js", { workerData: chunk });
+    workers.push(worker);
   }
+  //array of promises to retrieve data from workers
+  const promises = workers.map((worker) => {
+    return new Promise<any>((resolve) => {
+      worker.on("message", resolve);
+    });
+  });
+
+  // Send messages to workers
+  workers.forEach((worker, index) => {
+    worker.postMessage({ index });
+  });
 
   // Wait for all promises to resolve
   const results = await Promise.all(promises);
 
-  return res.json({ array: results });
+  // Flatten and return the results
+  return res.json({ array: results.flat() });
 });
 
-const server = app.listen(5000, () => {
-  console.log(`Server is running on port ${5000}`);
+const server = app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
